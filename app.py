@@ -3,6 +3,11 @@ import numpy as np
 import pandas as pd
 
 # ==============================
+# KONFIGURASI HALAMAN (Wajib Paling Atas)
+# ==============================
+st.set_page_config(page_title="SPK Rekomendasi Makanan", page_icon="🍽️")
+
+# ==============================
 # DATA DASAR
 # ==============================
 criteria = ["HP","P","KP","HO","KR","KM","KK"]
@@ -32,16 +37,8 @@ app_name = {
     "SF": "ShopeeFood (Shopee)"
 }
 
-scale_map = {
-    "Sama penting": 1,
-    "Sedikit lebih penting": 3,
-    "Lebih penting": 5,
-    "Jauh lebih penting": 7,
-    "Sangat jauh lebih penting": 9
-}
-
 # ==============================
-# AHP FUNCTION
+# 1. FUNGSI AHP (Menghitung Bobot)
 # ==============================
 def run_ahp(user_input):
     n = len(criteria)
@@ -51,271 +48,158 @@ def run_ahp(user_input):
         ahp.loc[A,B] = val
         ahp.loc[B,A] = 1/val
 
+    # Normalisasi & Hitung Bobot Prioritas
     norm = ahp / ahp.sum()
     weights = norm.mean(axis=1)
-
-    
 
     return weights.to_dict()
 
 # ==============================
-# FUZZY TOPSIS FUNCTION
+# 2. FUNGSI FUZZY TOPSIS (Perangkingan)
 # ==============================
 def run_fuzzy_topsis(weights):
     alternatives = ["GO","GR","SF"]
 
+    # --- PERBAIKAN DI SINI: Data Fuzzy yang Bersih ---
+    # Data ini adalah skala TFN (Triangular Fuzzy Number)
     fuzzy_data = {
-import numpy as np
-import pandas as pd
-
-print("🔷 CELL 4 — FUZZY TOPSIS (TANPA NORMALISASI)")
-print("="*70)
-
-# =================================================
-# 1️⃣ ALTERNATIF
-# =================================================
-alternatives = ["GO", "GR", "SF"]
-
-# =================================================
-# 2️⃣ MATRIKS KEPUTUSAN FUZZY (AWAL)
-#    C1=HP, C2=P, C3=KP, C4=HO, C5=KR, C6=KM, C7=KK
-# =================================================
-fuzzy_data = {
-    "HP": [(0.544414,0.765,0.8812), (0.53831,0.76335,0.89047), (0.54761,0.7683,0.87581)],
-    "P":  [(0.55789,0.77971,0.88227), (0.54298,0.76459,0.87977), (0.55344,0.78012,0.894)],
-    "KP": [(0.49492,0.712,0.8528), (0.49237,0.71289,0.86127), (0.50876,0.73038,0.86712)],
-    "HO": [(0.55334,0.77443,0.88013), (0.52525,0.74663,0.87220), (0.53063,0.75545,0.88478)],
-    "KR": [(0.56464,0.79017,0.89541), (0.52824,0.7521,0.88549), (0.52284,0.74196,0.86457)],
-    "KM": [(0.57075,0.79256,0.88192), (0.56015,0.78093,0.87761), (0.56296,0.78897,0.89365)],
-    "KK": [(0.50063,0.72037,0.86675), (0.47474,0.69039,0.84050), (0.48461,0.70308,0.85206)]
-}
-
-fuzzy_df = pd.DataFrame(fuzzy_data, index=alternatives)
-print("\n1️⃣ Matriks Keputusan Fuzzy")
-display(fuzzy_df)
-
-# =================================================
-# 3️⃣ MATRIKS KEPUTUSAN FUZZY TERBOBOT (AHP USER)
-# =================================================
-weighted_fuzzy = {}
-
-for c in fuzzy_df.columns:
-    w = user_weights[c]
-    weighted_fuzzy[c] = [(l*w, m*w, u*w) for l,m,u in fuzzy_df[c]]
-
-weighted_df = pd.DataFrame(weighted_fuzzy, index=alternatives)
-print("\n2️⃣ Matriks Keputusan Fuzzy Terbobot")
-display(weighted_df)
-
-# =================================================
-# 4️⃣ DEFUZZIFIKASI (CENTROID / GMI)
-#    M = (l + 4m + u) / 6
-# =================================================
-def defuzzify(tfn):
-    l, m, u = tfn
-    return (l + 4*m + u) / 6
-
-crisp_df = weighted_df.applymap(defuzzify)
-print("\n3️⃣ Matriks Defuzzifikasi (Crisp)")
-display(crisp_df)
-
-# =================================================
-# 5️⃣ FPIS & FNIS (PERHATIKAN COST & BENEFIT)
-# =================================================
-cost_criteria = ["HP", "HO"]
-benefit_criteria = ["P", "KP", "KR", "KM", "KK"]
-
-FPIS = {}
-FNIS = {}
-
-for c in crisp_df.columns:
-    if c in benefit_criteria:
-        FPIS[c] = crisp_df[c].max()
-        FNIS[c] = crisp_df[c].min()
-    else:  # cost
-        FPIS[c] = crisp_df[c].min()
-        FNIS[c] = crisp_df[c].max()
-
-print("\n4️⃣ FPIS")
-display(pd.Series(FPIS))
-
-print("\n5️⃣ FNIS")
-display(pd.Series(FNIS))
-
-# =================================================
-# 6️⃣ JARAK D+ & D-
-# =================================================
-D_pos = {}
-D_neg = {}
-
-for alt in alternatives:
-    D_pos[alt] = np.sqrt(((crisp_df.loc[alt] - pd.Series(FPIS))**2).sum())
-    D_neg[alt] = np.sqrt(((crisp_df.loc[alt] - pd.Series(FNIS))**2).sum())
-
-distance_df = pd.DataFrame({
-    "D+": D_pos,
-    "D-": D_neg
-})
-
-print("\n6️⃣ Jarak ke FPIS & FNIS")
-display(distance_df)
-
-# =================================================
-# 7️⃣ CLOSENESS COEFFICIENT & RANKING
-# =================================================
-CC = distance_df["D-"] / (distance_df["D+"] + distance_df["D-"])
-ranking_df = CC.sort_values(ascending=False).to_frame("Closeness Coefficient")
-
-print("\n7️⃣ RANKING AKHIR ALTERNATIF")
-display(ranking_df)
+        "HP": [(0.544,0.765,0.881), (0.538,0.763,0.890), (0.547,0.768,0.875)],
+        "P":  [(0.557,0.779,0.882), (0.542,0.764,0.879), (0.553,0.780,0.894)],
+        "KP": [(0.494,0.712,0.852), (0.492,0.712,0.861), (0.508,0.730,0.867)],
+        "HO": [(0.553,0.774,0.880), (0.525,0.746,0.872), (0.530,0.755,0.884)],
+        "KR": [(0.564,0.790,0.895), (0.528,0.752,0.885), (0.522,0.741,0.864)],
+        "KM": [(0.570,0.792,0.881), (0.560,0.780,0.877), (0.562,0.788,0.893)],
+        "KK": [(0.500,0.720,0.866), (0.474,0.690,0.840), (0.484,0.703,0.852)]
     }
 
     df = pd.DataFrame(fuzzy_data, index=alternatives)
 
+    # Matriks Ternormalisasi Terbobot Fuzzy
     weighted = {}
     for c in df.columns:
         w = weights[c]
-        weighted[c] = [(l*w,m*w,u*w) for l,m,u in df[c]]
+        weighted[c] = [(l*w, m*w, u*w) for l,m,u in df[c]]
 
     wdf = pd.DataFrame(weighted, index=alternatives)
-    crisp = wdf.applymap(lambda x:(x[0]+4*x[1]+x[2])/6)
+    
+    # Defuzzifikasi (Mengubah Fuzzy ke Angka Tegas)
+    crisp = wdf.applymap(lambda x: (x[0] + 4*x[1] + x[2]) / 6)
 
-    cost = ["HP","HO"]
-    benefit = ["P","KP","KR","KM","KK"]
+    # Menentukan FPIS (Solusi Ideal Positif) & FNIS (Negatif)
+    cost = ["HP","HO"] # Kriteria Biaya (makin rendah makin bagus)
+    benefit = ["P","KP","KR","KM","KK"] # Kriteria Keuntungan
 
     FPIS, FNIS = {},{}
     for c in crisp.columns:
         if c in benefit:
-            FPIS[c]=crisp[c].max()
-            FNIS[c]=crisp[c].min()
-        else:
-            FPIS[c]=crisp[c].min()
-            FNIS[c]=crisp[c].max()
+            FPIS[c] = crisp[c].max()
+            FNIS[c] = crisp[c].min()
+        else: # Cost
+            FPIS[c] = crisp[c].min()
+            FNIS[c] = crisp[c].max()
 
-    Dp,Dn={},{}
+    # Menghitung Jarak ke Solusi Ideal
+    Dp, Dn = {}, {}
     for a in alternatives:
-        Dp[a]=np.sqrt(((crisp.loc[a]-pd.Series(FPIS))**2).sum())
-        Dn[a]=np.sqrt(((crisp.loc[a]-pd.Series(FNIS))**2).sum())
+        Dp[a] = np.sqrt(((crisp.loc[a] - pd.Series(FPIS))**2).sum())
+        Dn[a] = np.sqrt(((crisp.loc[a] - pd.Series(FNIS))**2).sum())
 
-    CC = {a:Dn[a]/(Dp[a]+Dn[a]) for a in alternatives}
-    best = max(CC, key=CC.get)
+    # Menghitung Skor Akhir (Closeness Coefficient)
+    CC = {a: Dn[a] / (Dp[a] + Dn[a]) for a in alternatives}
+    
+    # Mengurutkan dari skor tertinggi ke terendah
+    # Hasil berupa list: [('GO', 0.85), ('SF', 0.72), ('GR', 0.65)]
+    sorted_ranking = sorted(CC.items(), key=lambda item: item[1], reverse=True)
 
-    return best, CC, crisp
-
-def format_result(best, scores, crisp):
-    app_full_name = {
-        "GO": "GoFood (Gojek)",
-        "GR": "GrabFood (Grab)",
-        "SF": "ShopeeFood (Shopee)"
-    }
-
-    criteria_full_name = {
-        "HP": "Harga Produk",
-        "HO": "Harga Ongkir",
-        "P":  "Promo",
-        "KP": "Kecepatan Pengantaran",
-        "KR": "Kelengkapan Restoran dan Menu",
-        "KM": "Keadaan Makanan",
-        "KK": "Keramahan Kurir"
-    }
-
-    # Nilai preferensi akhir
-    best_score = scores[best]
-
-    # Kontribusi relatif
-    raw_scores = crisp.loc[best]
-    contribution_ratio = raw_scores / raw_scores.sum()
-
-    top_criteria = (
-        contribution_ratio
-        .sort_values(ascending=False)
-        .head(3)
-    )
-
-    return {
-        "best_app": app_full_name[best],
-        "best_score": best_score,
-        "top_criteria": {
-            criteria_full_name[k]: v * 100
-            for k, v in top_criteria.items()
-        }
-    }
+    return sorted_ranking, crisp
 
 # ==============================
-# STREAMLIT UI
+# STREAMLIT UI (Tampilan)
 # ==============================
-st.title("🍽️ Sistem Rekomendasi Aplikasi Pemesanan Makanan")
+st.title("🍽️ Sistem Rekomendasi Aplikasi Makanan")
+st.info("Aplikasi ini menggunakan metode Hybrid AHP (untuk bobot preferensi) dan Fuzzy TOPSIS (untuk perankingan).")
 
-st.write("Silakan isi preferensi Anda berdasarkan perbandingan berikut:")
+st.write("### Tentukan Preferensi Anda:")
 
 user_input = {}
 
-for i, (A, B) in enumerate(questions, start=1):
-
-    st.markdown(f"### Pertanyaan {i}")
-    st.write("Menurut Anda, mana yang lebih penting?")
-    st.markdown(f"**{criteria_full[A]}** dibandingkan **{criteria_full[B]}**")
-
-    options = [
-        f"{A} dan {B} sama penting",
-        f"{A} sedikit lebih penting dari {B}",
-        f"{A} lebih penting dari {B}",
-        f"{A} jauh lebih penting dari {B}",
-        f"{A} sangat jauh lebih penting dari {B}",
-        f"{B} sedikit lebih penting dari {A}",
-        f"{B} lebih penting dari {A}",
-        f"{B} jauh lebih penting dari {A}",
-        f"{B} sangat jauh lebih penting dari {A}"
-    ]
-
-    choice = st.selectbox(
-        label="Jawaban:",
-        options=options,
-        key=f"q_{i}"
-    )
-
-    if choice == f"{A} dan {B} sama penting":
+# Menggunakan Form agar halaman tidak reload setiap kali klik
+with st.form("ahp_form"):
+    for i, (A, B) in enumerate(questions, start=1):
+        st.write(f"**{i}. {criteria_full[A]}** vs **{criteria_full[B]}**")
+        
+        # Opsi jawaban yang lebih mudah dipahami
+        options = [
+            f"Sama penting",
+            f"{criteria_full[A]} sedikit lebih penting",
+            f"{criteria_full[A]} lebih penting",
+            f"{criteria_full[A]} mutlak lebih penting",
+            f"{criteria_full[B]} sedikit lebih penting",
+            f"{criteria_full[B]} lebih penting",
+            f"{criteria_full[B]} mutlak lebih penting"
+        ]
+        
+        choice = st.selectbox(f"Pilih perbandingan {i}", options, key=f"q_{i}", label_visibility="collapsed")
+        
+        # Logika konversi jawaban ke angka (Skala Saaty)
         val = 1
-    elif choice == f"{A} sedikit lebih penting dari {B}":
-        val = 3
-    elif choice == f"{A} lebih penting dari {B}":
-        val = 5
-    elif choice == f"{A} jauh lebih penting dari {B}":
-        val = 7
-    elif choice == f"{A} sangat jauh lebih penting dari {B}":
-        val = 9
-    elif choice == f"{B} sedikit lebih penting dari {A}":
-        val = 1 / 3
-    elif choice == f"{B} lebih penting dari {A}":
-        val = 1 / 5
-    elif choice == f"{B} jauh lebih penting dari {A}":
-        val = 1 / 7
-    elif choice == f"{B} sangat jauh lebih penting dari {A}":
-        val = 1 / 9
+        if choice == options[1]: val = 3
+        elif choice == options[2]: val = 5
+        elif choice == options[3]: val = 9
+        elif choice == options[4]: val = 1/3
+        elif choice == options[5]: val = 1/5
+        elif choice == options[6]: val = 1/9
+        
+        user_input[(A, B)] = val
+        st.divider()
 
-    user_input[(A, B)] = val
+    submitted = st.form_submit_button("🔍 Hitung Rekomendasi")
 
-
-if st.button("🔍 Lihat Rekomendasi"):
+if submitted:
+    # 1. Jalankan Perhitungan
     weights = run_ahp(user_input)
-    best, scores, crisp = run_fuzzy_topsis(weights)
+    sorted_ranking, crisp = run_fuzzy_topsis(weights)
 
-    result = format_result(best, scores, crisp)
+    # 2. Ambil Data Juara 1, 2, dan 3
+    # sorted_ranking bentuknya: [('Kode', Skor), ('Kode', Skor), ...]
+    rank1_code, rank1_score = sorted_ranking[0]
+    rank2_code, rank2_score = sorted_ranking[1]
+    rank3_code, rank3_score = sorted_ranking[2]
 
-    st.markdown("## 🍽️ HASIL REKOMENDASI APLIKASI PEMESANAN MAKANAN")
+    # Hitung kontribusi kriteria untuk Juara 1 (sebagai alasan)
+    raw_scores = crisp.loc[rank1_code]
+    top_criteria = (raw_scores / raw_scores.sum()).sort_values(ascending=False).head(3)
+
+    # ==============================
+    # TAMPILAN HASIL
+    # ==============================
+    st.markdown("## 🏆 Hasil Perankingan")
+    
+    # --- JUARA 1 ---
+    st.success(f"### 🥇 {app_name[rank1_code]}")
+    st.markdown(f"**Skor Preferensi Tertinggi: `{rank1_score:.4f}`**")
+    
+    st.write("**Kenapa ini direkomendasikan?**")
+    st.caption("Berdasarkan bobot preferensi Anda, aplikasi ini unggul di faktor:")
+    col_alasan = st.columns(3)
+    for idx, (crit, val) in enumerate(top_criteria.items()):
+        col_alasan[idx].metric(label=criteria_full[crit], value=f"{val*100:.1f}%")
+    
     st.markdown("---")
 
-    st.success("✅ **Rekomendasi terbaik untuk Anda adalah:**")
-    st.markdown(f"### 👉 {result['best_app']}")
+    # --- JUARA 2 & 3 ---
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.info(f"🥈 **Peringkat 2**")
+        st.markdown(f"#### {app_name[rank2_code]}")
+        st.write(f"Skor: `{rank2_score:.4f}`")
 
-    st.markdown(f"📊 **Nilai preferensi akhir:** `{result['best_score']:.4f}`")
+    with col2:
+        st.warning(f"🥉 **Peringkat 3**")
+        st.markdown(f"#### {app_name[rank3_code]}")
+        st.write(f"Skor: `{rank3_score:.4f}`")
 
-    st.markdown("### 🔍 Alasan utama rekomendasi ini:")
-    for crit, val in result["top_criteria"].items():
-        st.markdown(f"- **{crit}**, berkontribusi sekitar **{val:.1f}%**")
-
-    st.info(
-        "💡 **Catatan:**\n\n"
-        "Persentase menunjukkan kontribusi relatif setiap kriteria "
-        "terhadap skor akhir alternatif yang direkomendasikan."
-    )
+    st.markdown("---")
+    with st.expander("Lihat Detail Bobot Kriteria Anda"):
+        st.write(pd.Series(weights).rename(index=criteria_full).sort_values(ascending=False))
